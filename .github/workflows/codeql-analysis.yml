@@ -53,7 +53,7 @@ jobs:
       with:
         languages: javascript
         # Use the GitHub Container Registry (GHCR) to access the custom query pack from org scope
-        queries: timothywarner-org/globomantics-security-queries@main
+        queries: timothywarner-org/globomantics-secure-scan@main
         # Enable additional query packs for enhanced coverage
         packs: +security-extended,security-and-quality
 
@@ -76,7 +76,7 @@ jobs:
       run: |
         echo "## CodeQL Analysis Summary" >> $GITHUB_STEP_SUMMARY
         echo "🔍 Analysis completed using org-scoped custom query pack" >> $GITHUB_STEP_SUMMARY
-        echo "📊 Query pack: timothywarner-org/globomantics-security-queries@main" >> $GITHUB_STEP_SUMMARY
+        echo "📊 Query pack: timothywarner-org/globomantics-secure-scan@main" >> $GITHUB_STEP_SUMMARY
         echo "⏱️ Analysis completed at: $(date)" >> $GITHUB_STEP_SUMMARY
         if [ -n "${{ github.event.inputs.reason }}" ]; then
           echo "🔖 Trigger reason: ${{ github.event.inputs.reason }}" >> $GITHUB_STEP_SUMMARY

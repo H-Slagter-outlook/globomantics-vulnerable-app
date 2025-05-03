@@ -1,33 +1,129 @@
 # Globomantics Vulnerable App
 
-A deliberately vulnerable Express.js application designed for testing and demonstrating CodeQL security queries. This repo demonstrates how a project can consume a centrally governed CodeQL query pack from GitHub Container Registry.
+A deliberately vulnerable Express.js application designed for testing and demonstrating CodeQL security queries. This repo demonstrates how a project can consume a centrally governed CodeQL query pack from an organization repository.
 
 ## ⚠️ WARNING
 
-This application contains **INTENTIONAL SECURITY VULNERABILITIES** for educational purposes. **DO NOT** deploy in a production environment.
+This application contains **INTENTIONAL SECURITY VULNERABILITIES** for educational purposes. **DO NOT** deploy in a production environment or expose to the internet.
 
-## 🔍 Purpose
+## 🔍 Purpose & Architecture
 
 This app serves as a test bed for the [Globomantics JavaScript Security Query Pack](https://github.com/timothywarner-org/globomantics-secure-scan), showcasing how CodeQL can identify common security issues in JavaScript applications.
 
-The project demonstrates a complete security scanning solution:
-1. The vulnerable app with intentional security flaws
-2. A GitHub Actions workflow that uses a custom CodeQL query pack from GHCR
-3. Scripts to run CodeQL analysis locally
+### Enterprise Security Architecture
+
+The project demonstrates a complete enterprise security scanning solution:
+
+```
+┌─────────────────────────┐      ┌─────────────────────────┐
+│                         │      │                         │
+│  Globomantics Secure    │      │  Vulnerable App Repo    │
+│  Scan Repository        │◄─────┤  (This Repository)      │
+│  (Central Query Pack)   │      │                         │
+│                         │      │                         │
+└─────────────────────────┘      └─────────────────────────┘
+         ▲                                    │
+         │                                    ▼
+         │                        ┌─────────────────────────┐
+         │                        │                         │
+         └────────────────────────┤  GitHub Actions CI/CD   │
+                                  │  CodeQL Workflow        │
+                                  │                         │
+                                  └─────────────────────────┘
+```
+
+1. **Centralized Security Governance**: Custom security queries maintained in a central repository
+2. **Decentralized Implementation**: Individual application repositories reference the central query pack
+3. **Automated Analysis**: GitHub Actions workflow runs scans on every PR, push to main, and weekly
 
 ## 🔐 Vulnerabilities
 
-This application contains the following intentional vulnerabilities:
+This application contains the following intentional vulnerabilities to demonstrate CodeQL capabilities:
 
-1. **Code Injection (CWE-94)**: The `/calculate` endpoint uses `eval()` to execute user-provided JavaScript code without proper validation.
+### 1. Code Injection (CWE-94)
+The `/calculate` endpoint uses `eval()` to execute user-provided JavaScript code without proper validation.
 
-2. **HTTP Header Injection (CWE-113)**: The `/redirect` endpoint places user input directly into HTTP headers without sanitization.
+```javascript
+// VULNERABILITY: Using eval with user input
+app.get('/calculate', (req, res) => {
+  const formula = req.query.formula;
+  let result;
+  
+  try {
+    result = eval(formula); // Vulnerable code!
+    res.json({ result });
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid formula' });
+  }
+});
+```
 
-3. **Insecure Randomness (CWE-338)**: The `/generate-token` endpoint uses `Math.random()` for security-sensitive operations like token generation.
+**Exploitation**: `http://localhost:3000/calculate?formula=console.log(process.env);return+1`
 
-4. **Information Exposure (CWE-200)**: The error handler exposes sensitive stack traces to users.
+**Mitigation**: Use a dedicated math expression parser library or sanitize and validate user inputs.
 
-5. **Hard-coded Secrets (CWE-798)**: The session configuration uses a hard-coded secret key.
+### 2. HTTP Header Injection (CWE-113)
+The `/redirect` endpoint places user input directly into HTTP headers without sanitization.
+
+```javascript
+// VULNERABILITY: Using user input directly in headers
+app.get('/redirect', (req, res) => {
+  const redirectUrl = req.query.url;
+  
+  res.setHeader('Location', redirectUrl); // Vulnerable code!
+  res.status(302).send('Redirecting...');
+});
+```
+
+**Exploitation**: `http://localhost:3000/redirect?url=https://example.com%0D%0AX-Injected:malicious-value`
+
+**Mitigation**: Validate URL format and sanitize inputs before including in headers.
+
+### 3. Insecure Randomness (CWE-338)
+The `/generate-token` endpoint uses `Math.random()` for security-sensitive operations like token generation.
+
+```javascript
+// VULNERABILITY: Using Math.random() for tokens
+app.post('/generate-token', (req, res) => {
+  const token = Math.random().toString(36).substring(2) + 
+                Math.random().toString(36).substring(2); // Vulnerable code!
+  res.json({ token });
+});
+```
+
+**Exploitation**: Tokens generated with Math.random() are predictable and can be brute-forced.
+
+**Mitigation**: Use `crypto.randomBytes()` or `crypto.randomUUID()` for cryptographically secure random values.
+
+### 4. Information Exposure (CWE-200)
+The error handler exposes sensitive stack traces to users.
+
+```javascript
+// VULNERABILITY: Exposing sensitive error details to clients
+app.use((err, req, res, next) => {
+  res.status(err.status || 500).json({
+    message: err.message,
+    stack: err.stack // Vulnerable code!
+  });
+});
+```
+
+**Mitigation**: Log detailed errors server-side but return generic error messages to clients.
+
+### 5. Hard-coded Secrets (CWE-798)
+The session configuration uses a hard-coded secret key.
+
+```javascript
+// VULNERABILITY: Weak session configuration
+app.use(session({
+  secret: 'globomantics-secret-key', // Vulnerable code!
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false } // Also insecure
+}));
+```
+
+**Mitigation**: Store secrets in environment variables or secure secret management solutions.
 
 ## 📋 Installation
 
@@ -47,21 +143,51 @@ npm start
 
 ## 🚀 Usage
 
-The application runs on `http://localhost:3000` by default and provides an interactive web interface to test the vulnerabilities:
+The application runs on `http://localhost:3000` by default and provides an interactive web interface to test the vulnerabilities.
 
-- **Code Injection**: Try entering JavaScript expressions in the calculator form
-- **HTTP Header Injection**: Test the redirect functionality with header injection attempts
-- **Insecure Randomness**: Generate tokens using insecure randomness methods
+### Testing Vulnerabilities
 
-## 🔎 Testing with CodeQL
+| Vulnerability | Test URL/Method | Example Payload |
+|---------------|----------------|----------------|
+| Code Injection | `/calculate?formula=[payload]` | `2*3;console.log('Injected!')`|
+| Header Injection | `/redirect?url=[payload]` | `https://example.com%0D%0AX-Injected:value` |
+| Insecure Randomness | POST to `/generate-token` | N/A - observe token patterns |
 
-### Automated Analysis with GitHub Actions
+## 🔎 CodeQL Analysis Setup
 
-This repository includes a GitHub Actions workflow that automatically runs the custom CodeQL queries against the codebase. The workflow:
+### GitHub Actions Workflow
 
-1. Uses the GitHub CodeQL action to initialize a CodeQL environment
-2. Pulls the custom query pack from the GitHub Container Registry
-3. Runs the analysis and uploads results to GitHub Advanced Security
+This repository uses a GitHub Actions workflow (`.github/workflows/codeql-analysis.yml`) that:
+
+```yaml
+- name: Initialize CodeQL
+  uses: github/codeql-action/init@v2
+  with:
+    languages: javascript
+    queries: timothywarner-org/globomantics-secure-scan@main
+    packs: +security-extended,security-and-quality
+```
+
+Key components:
+- **languages**: Specifies JavaScript analysis
+- **queries**: References the organization-owned custom query pack
+- **packs**: Adds standard security query packs (the "+" means append rather than replace)
+
+### Custom Query Pack Structure
+
+The `globomantics-secure-scan` repository contains:
+
+```
+globomantics-secure-scan/
+├── queries/
+│   └── javascript/
+│       ├── detect-eval-use.ql          # Detects dangerous eval() usage
+│       ├── http-header-injection.ql    # Finds header injection vulnerabilities
+│       ├── insecure-randomness.ql      # Identifies insecure randomness
+│       └── security-suite.qls          # Query suite that combines all queries
+├── codeql-pack.yml                     # Pack configuration
+└── qlpack.yml                          # Legacy pack configuration
+```
 
 ### Local Testing
 
@@ -81,10 +207,50 @@ These scripts:
 3. Run the complete security suite
 4. Generate SARIF files with the results
 
-## 📚 Educational Purpose
+Example command:
+```bash
+codeql database analyze js-db ../globomantics-secure-scan/queries/javascript/detect-eval-use.ql --format=sarif-latest --output=logs/eval-results.sarif
+```
+
+## 📚 Learning Resources
+
+### CodeQL Learning Path
+
+1. **Basics**: [Introduction to CodeQL](https://codeql.github.com/docs/codeql-overview/)
+2. **Query Language**: [Learning CodeQL](https://codeql.github.com/docs/writing-codeql-queries/)
+3. **Advanced**: [Creating custom queries](https://codeql.github.com/docs/writing-codeql-queries/advanced-topics/)
+
+### OWASP References
+
+- [OWASP Top 10](https://owasp.org/Top10/)
+- [OWASP JavaScript Security Guide](https://cheatsheetseries.owasp.org/cheatsheets/Nodejs_Security_Cheat_Sheet.html)
+
+### GitHub Advanced Security
+
+- [GitHub CodeQL Documentation](https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/about-code-scanning-with-codeql)
+- [Custom CodeQL Packs](https://docs.github.com/en/code-security/codeql-cli/using-the-codeql-cli/creating-and-working-with-codeql-packs)
+
+## 🎓 Educational Purpose
 
 This repository is part of the GitHub Enterprise Cloud training materials created by Tim Warner for Pluralsight. It showcases how organizations can leverage GitHub Advanced Security with custom CodeQL query packs to enhance their security posture.
 
+The repository demonstrates real-world enterprise security scanning patterns:
+- **Centralized Security Governance**: Security teams maintain queries in one place
+- **Developer Empowerment**: Easy integration into CI/CD pipelines
+- **Shift-Left Security**: Early vulnerability detection in the development process
+
 ## 📄 License
 
-MIT 
+MIT
+
+## 🤝 Contributing
+
+Contributions to enhance the educational value of this project are welcome. Please submit PRs with:
+- Additional vulnerabilities to demonstrate
+- Improved documentation
+- New CodeQL queries to detect other issues
+
+## 🔗 Related Projects
+
+- [Globomantics Secure Scan](https://github.com/timothywarner-org/globomantics-secure-scan) - The custom CodeQL query pack
+- [OWASP NodeGoat](https://github.com/OWASP/NodeGoat) - Another vulnerable Node.js app for learning 
