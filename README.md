@@ -157,7 +157,9 @@ The application runs on `http://localhost:3000` by default and provides an inter
 
 ### GitHub Actions Workflow
 
-This repository uses a GitHub Actions workflow (`.github/workflows/codeql-analysis.yml`) that:
+This repository demonstrates two different methods for using custom CodeQL query packs:
+
+#### Method 1: Direct Repository Reference
 
 ```yaml
 - name: Initialize CodeQL
@@ -168,10 +170,49 @@ This repository uses a GitHub Actions workflow (`.github/workflows/codeql-analys
     packs: +security-extended,security-and-quality
 ```
 
-Key components:
-- **languages**: Specifies JavaScript analysis
-- **queries**: References the organization-owned custom query pack
-- **packs**: Adds standard security query packs (the "+" means append rather than replace)
+This method directly references the query pack from an organization repository, which is useful for:
+- Rapid development and testing of queries
+- Transparent change tracking and versioning through Git
+- Simplified pull request workflows for query improvements
+
+#### Method 2: GitHub Container Registry (GHCR) Package
+
+```yaml
+- name: Initialize CodeQL
+  uses: github/codeql-action/init@v2
+  with:
+    languages: javascript
+    packs: +security-extended,security-and-quality,timothywarner-org/globomantics-secure-scan@1.0.0
+```
+
+This method uses published CodeQL packs from GitHub Container Registry, which provides:
+- Immutable versioned packages
+- Enhanced performance for large-scale deployments
+- Separation between query development and consumption
+- Centralized package distribution
+
+You can manually trigger either approach using the workflow_dispatch inputs in GitHub Actions.
+
+### Publishing CodeQL Packs to GHCR
+
+To publish a CodeQL pack to GHCR, you can use:
+
+```bash
+# Authenticate with GitHub Container Registry
+echo $GITHUB_TOKEN | codeql pack login --repository=timothywarner-org/globomantics-secure-scan
+
+# Publish the pack
+codeql pack publish
+```
+
+You can also install the published pack using:
+
+```bash
+# Download and install the pack
+codeql pack download timothywarner-org/globomantics-secure-scan@1.0.0
+```
+
+For automated publishing, see the `publish-codeql-pack.sh` script in the globomantics-secure-scan repository.
 
 ### Custom Query Pack Structure
 

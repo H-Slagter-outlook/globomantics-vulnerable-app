@@ -13,6 +13,11 @@ on:
         description: 'Reason for manual trigger'
         required: false
         default: 'Manual security scan'
+      use_ghcr:
+        description: 'Use GHCR package instead of repo reference'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   analyze:
@@ -48,14 +53,25 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-codeql-db-
 
-    - name: Initialize CodeQL
+    # Method 1: Using direct repository reference (default)
+    - name: Initialize CodeQL with Repository Reference
+      if: ${{ !github.event.inputs.use_ghcr || github.event.inputs.use_ghcr == 'false' }}
       uses: github/codeql-action/init@v2
       with:
         languages: javascript
-        # Use the GitHub Container Registry (GHCR) to access the custom query pack from org scope
+        # Direct reference to the organization repository
         queries: timothywarner-org/globomantics-secure-scan@main
         # Enable additional query packs for enhanced coverage
         packs: +security-extended,security-and-quality
+
+    # Method 2: Using GitHub Container Registry package
+    - name: Initialize CodeQL with GHCR Package
+      if: ${{ github.event.inputs.use_ghcr == 'true' }}
+      uses: github/codeql-action/init@v2
+      with:
+        languages: javascript
+        # Using the GitHub Container Registry package reference
+        packs: +security-extended,security-and-quality,timothywarner-org/globomantics-secure-scan@1.0.0
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
@@ -71,12 +87,25 @@ jobs:
         retention-days: 7
         if-no-files-found: warn
     
-    - name: Generate CodeQL Analysis Summary
-      id: summary
+    - name: Generate CodeQL Analysis Summary (Repository Reference)
+      if: ${{ !github.event.inputs.use_ghcr || github.event.inputs.use_ghcr == 'false' }}
+      id: summary-repo
       run: |
         echo "## CodeQL Analysis Summary" >> $GITHUB_STEP_SUMMARY
         echo "🔍 Analysis completed using org-scoped custom query pack" >> $GITHUB_STEP_SUMMARY
-        echo "📊 Query pack: timothywarner-org/globomantics-secure-scan@main" >> $GITHUB_STEP_SUMMARY
+        echo "📊 Query pack: timothywarner-org/globomantics-secure-scan@main (direct repository reference)" >> $GITHUB_STEP_SUMMARY
+        echo "⏱️ Analysis completed at: $(date)" >> $GITHUB_STEP_SUMMARY
+        if [ -n "${{ github.event.inputs.reason }}" ]; then
+          echo "🔖 Trigger reason: ${{ github.event.inputs.reason }}" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Generate CodeQL Analysis Summary (GHCR Package)
+      if: ${{ github.event.inputs.use_ghcr == 'true' }}
+      id: summary-ghcr
+      run: |
+        echo "## CodeQL Analysis Summary" >> $GITHUB_STEP_SUMMARY
+        echo "🔍 Analysis completed using org-scoped custom query pack" >> $GITHUB_STEP_SUMMARY
+        echo "📊 Query pack: timothywarner-org/globomantics-secure-scan@1.0.0 (from GHCR)" >> $GITHUB_STEP_SUMMARY
         echo "⏱️ Analysis completed at: $(date)" >> $GITHUB_STEP_SUMMARY
         if [ -n "${{ github.event.inputs.reason }}" ]; then
           echo "🔖 Trigger reason: ${{ github.event.inputs.reason }}" >> $GITHUB_STEP_SUMMARY
