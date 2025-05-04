@@ -80,7 +80,7 @@ jobs:
         upload: true # Upload SARIF results to GitHub Advanced Security
 
     - name: Upload CodeQL Database
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: codeql-database
         path: ~/.codeql/databases
